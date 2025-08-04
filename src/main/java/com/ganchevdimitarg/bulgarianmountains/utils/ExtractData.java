@@ -14,6 +14,7 @@ import org.springframework.web.client.RestClient;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 @Component
 @Slf4j
@@ -23,14 +24,14 @@ public class ExtractData implements CommandLineRunner {
     private final HutRepository hunRepository;
 
     @Override
-    public void run(String... args) throws Exception {
+    public void run(String... args) {
         List<Hut> huts = new ArrayList<>();
         String body = this.restClient.get()
                 .uri("https://www.btsbg.org/hizhi")
                 .retrieve()
                 .body(String.class);
 
-        Document doc = Jsoup.parse(body);
+        Document doc = Jsoup.parse(Objects.requireNonNull(body));
         Elements cities = doc.select("h3");
         cities.forEach(city -> {
             String name = city.text();
