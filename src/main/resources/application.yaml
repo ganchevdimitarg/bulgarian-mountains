@@ -7,11 +7,13 @@ spring:
       uri: mongodb://${MONGO_DB_USERNAME}:${MONGO_DB_PASSWORD}@localhost:27017/${MONGO_DB_DATABASE}?authSource=${MONGO_DB_DATABASE}
 
 logging:
+  file:
+    name: logging
   level:
-    root: debug
+    root: warn
     org:
-      hibernate: debug
       springframework:
+
         data:
           mongodb: debug
         web: debug
