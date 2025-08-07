@@ -15,7 +15,6 @@ import java.util.List;
 public class Hut {
     @Id
     private String id;
-    private String city;
     private String name;
     private String host;
     private String description;
@@ -31,7 +30,6 @@ public class Hut {
     @Override
     public String toString() {
         StringBuilder builder = new StringBuilder();
-        builder.append("city: ").append(city).append("\n");
         builder.append("name: ").append(name).append("\n");
         builder.append("host: ").append(host).append("\n");
         builder.append("description: ").append(description).append("\n");

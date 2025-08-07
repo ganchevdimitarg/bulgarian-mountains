@@ -8,5 +8,6 @@ import java.util.List;
 public record Contact(
         List<String> phone,
         String email,
-        String url) {
+        String url,
+        String website) {
 }
