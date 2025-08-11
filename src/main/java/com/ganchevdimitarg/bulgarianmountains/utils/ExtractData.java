@@ -14,8 +14,6 @@ import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
-import javax.swing.text.Utilities;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -24,6 +22,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static com.ganchevdimitarg.bulgarianmountains.utils.Constant.*;
 
@@ -46,7 +46,7 @@ public class ExtractData implements CommandLineRunner {
 
         try {
             foreachThroughResourceFiles();
-            huts.forEach(System.out::println);
+            this.hunRepository.saveAll(this.huts);
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -76,6 +76,7 @@ public class ExtractData implements CommandLineRunner {
         PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
         Resource[] resources = resolver.getResources("classpath:btsbg/hizhi/*");
 
+
         for (Resource resource : resources) {
             if (resource.isReadable()) {
                 try (InputStream inputStream = resource.getInputStream()) {
@@ -86,125 +87,71 @@ public class ExtractData implements CommandLineRunner {
                     mergeChildren(Objects.requireNonNull(document.select("div[class=\"field-item even\"][property=\"content:encoded\"]").first())
                             .children())
                             .forEach(child -> {
-                                if (child.tagName().equals("p")) {
-                                    String contentText = child.text();
-                                    this.huts.add(modifyData(contentText, name, url));
-                                }
+//                                if (child.tagName().equals("p")) {
+                                String contentText = child.text();
+                                this.huts.add(modifyData(contentText, name, url));
+//                                }
                             });
                 }
             }
         }
     }
 
+
     private List<Element> mergeChildren(List<Element> children) {
-        List<Element> result = new ArrayList<>();
+        StringBuilder mergedContent = new StringBuilder();
         for (Element child : children) {
-            if (result.isEmpty()) {
-                result.add(child);
-            } else {
-                String childText = child.removeClass("rtejustify").text().replace("<p>|</p>", "");
-                Element element;
-                if (!childText.isEmpty()) {
-                    element = new Element(result.getFirst().text() + childText);
-                    result.set(0, element);
-                }
+            String childText = child.removeClass("rtejustify").text().replaceAll("<p class=\"rtejustify\">|<|<p>|</p>|<span data-mce-mark=\"1\">|</span>|<strong>|</strong>", "");
+            if (!childText.isEmpty()) {
+                mergedContent.append(childText);
             }
         }
-        return result;
+        Element element = new Element("p");
+        element.text(mergedContent.toString());
+        return Collections.singletonList(element);
     }
+
 
     private Hut modifyData(String content, String name, String url) {
         List<String> descriptionChunk = getDescriptionChunk(getDescription(content));
 
-        String location = "";
-        String altitude = "";
-        String gps = "";
-        String des = "";
-        List<String> nearbyObjects = new ArrayList<>();
-        List<String> startingPoints = new ArrayList<>();
-        String host = "";
-        String email = "";
-        String atticFloor = "";
-        String mountainRoute = "";
-        List<String> phone = new ArrayList<>();
-        String website = "";
-        List<String> contactTmp = new ArrayList<>();
+        Map<String, String> dataMap = new HashMap<>();
         for (String d : descriptionChunk) {
             String[] chunk = d.split(SPLIT_DELIMITER.getConstant());
-            if (d.contains("Местоположение")) {
-                location = chunk.length > 1 ? chunk[1].trim() : chunk[0].trim();
-            } else if (d.contains("надморска височина")) {
-                altitude = chunk.length > 1 ? chunk[1].trim() : chunk[0].trim();
-            } else if (d.contains("GPS")) {
-                gps = chunk.length > 1 ? chunk[1].trim() : chunk[0].trim();
-            } else if (d.contains("Описание")) {
-                des = chunk.length > 1 ? chunk[1].trim() : chunk[0].trim();
-            } else if (d.contains("Съседни обекти")) {
-                String chunkTmp;
-                if (chunk.length > 1) {
-                    chunkTmp = chunk[1];
-                } else {
-                    chunkTmp = chunk[0];
-                }
-                if (chunkTmp.contains(";")) {
-                    nearbyObjects = splitChunck(chunkTmp, ";");
-                } else {
-                    nearbyObjects = splitChunck(chunkTmp, ",");
-                }
-            } else if (d.contains("Изходен пункт")) {
-                startingPoints.addAll(Arrays.stream(chunk.length > 1 ? chunk[1].trim().split(";") : chunk[0].trim().split(";")).toList());
-            } else if (d.contains("Изходни пунктове")) {
-                startingPoints.addAll(Arrays.stream(chunk.length > 1 ? chunk[1].trim().split(";") : chunk[0].trim().split(";")).toList());
-            } else if (d.contains("Стопанин")) {
-                host = chunk.length > 1 ? chunk[1].trim() : chunk[0].trim();
-            } else if (d.contains("еmail")) {
-                email = chunk.length > 1 ? chunk[1].trim() : chunk[0].trim();
-            } else if (d.contains("Тавански етаж")) {
-                atticFloor = chunk.length > 1 ? chunk[1].trim() : chunk[0].trim();
-            } else if (d.contains("Заслонът е пункт по маршрута")) {
-                mountainRoute = chunk.length > 1 ? chunk[1].trim() : chunk[0].trim();
-            } else if (d.contains("За контакти")) {
-                contactTmp.add(chunk.length > 1 ? chunk[1].trim() : chunk[0].trim());
-            } else if (d.contains("За контакти с хижата")) {
-                contactTmp.add(chunk.length > 1 ? chunk[1].trim() : chunk[0].trim());
-            } else if (d.contains("тел")) {
-                contactTmp.addAll(Arrays.stream(chunk.length > 1 ? chunk[1].trim().split(";") : chunk[0].trim().split("; ")).toList());
-            } else if (d.contains("на телефони")) {
-                contactTmp.addAll(Arrays.stream(chunk.length > 1 ? chunk[1].trim().split(";") : chunk[0].trim().split("; ")).toList());
-            } else if (d.contains("на телефон")) {
-                contactTmp.addAll(Arrays.stream(chunk.length > 1 ? chunk[1].trim().split(";") : chunk[0].trim().split("; ")).toList());
+            if (chunk.length > 1) {
+                dataMap.put(chunk[0].trim(), chunk[1].trim());
+            } else {
+                dataMap.put(chunk[0].trim(), "");
             }
         }
-
-        nearbyObjects = nearbyObjects.stream().map(String::trim).toList();
-
         Location locationDescription = Location.builder()
-                .altitude(altitude.replace(",|\\.", ""))
-                .coordinates(gps.replace(",|\\.", ""))
-                .description(location.replace(",|\\.", ""))
+                .altitude(dataMap.getOrDefault("надморска височина", "").replace(",|\\.", ""))
+                .coordinates(dataMap.getOrDefault("GPS", "").replace(",|\\.", ""))
+                .description(dataMap.getOrDefault("Местоположение", "").replace(",|\\.", ""))
                 .build();
 
         Contact contact = Contact.builder()
-                .phone(!contactTmp.isEmpty() && !Arrays.stream(contactTmp.getFirst().split(",")).filter(p -> !p.contains("www")).toList().isEmpty()
-                        ? Arrays.stream(contactTmp.getFirst().split(",")).filter(p -> !p.contains("www")).toList() : new ArrayList<>())
-                .email(email)
+                .phone(Arrays.stream(dataMap.getOrDefault("За контакти", "").split(";"))
+                        .filter(p -> !p.contains("www")).toList())
+                .email(dataMap.getOrDefault("еmail", ""))
                 .url(url)
-                .website(!contactTmp.isEmpty() && Arrays.stream(contactTmp.getFirst().split(",")).filter(p -> p.contains("www")).toArray().length > 0
-                        ? Arrays.stream(contactTmp.getFirst().split(",")).filter(p -> p.contains("www")).toArray()[0].toString().trim() : "")
+                .website(Arrays.stream(dataMap.getOrDefault("За контакти", "").split(","))
+                        .filter(p -> p.contains("www")).findFirst().orElse(""))
                 .build();
-
+        boolean notWorking = !content.toLowerCase().contains("не работи");
+        boolean underconstruction = !content.toLowerCase().contains("в ремонт");
         return Hut.builder()
                 .name(name)
-                .host(host)
-                .description(des)
-                .atticFloor(atticFloor)
-                .mountainRoute(mountainRoute)
+                .host(dataMap.getOrDefault("Стопанин", ""))
+                .description(dataMap.getOrDefault("Описание", ""))
+                .atticFloor(dataMap.getOrDefault("Тавански етаж", ""))
+                .mountainRoute(dataMap.getOrDefault("Заслонът е пункт по маршрута", ""))
                 .contact(contact)
                 .location(locationDescription)
-                .startingPoints(startingPoints)
-                .neighboringSites(nearbyObjects)
-                .isActive(!content.toLowerCase().contains("не работи"))
-                .isUnderRepair(!content.toLowerCase().contains("в ремонт"))
+                .startingPoints(Arrays.stream(dataMap.getOrDefault("Изходни пунктове", "").split(";")).toList())
+                .neighboringSites(Arrays.stream(dataMap.getOrDefault("Съседни обекти", "").split(",")).map(String::trim).toList())
+                .isActive(notWorking)
+                .isUnderRepair(underconstruction)
                 .build();
 
     }
@@ -228,38 +175,45 @@ public class ExtractData implements CommandLineRunner {
     }
 
     private List<String> getDescriptionChunk(String description) {
+        String[] keys = {
+                "Местоположение",
+                "надморска височина",
+                "GPS",
+                "Описание",
+                "Съседни обекти",
+                "Изходен пункт",
+                "Изходни пунктове",
+                "Стопанин",
+                "За контакти",
+                "За контакти с хижата",
+                "еmail",
+                "Тавански етаж",
+                "Заслонът е пункт по маршрута",
+                "url",
+                "тел"
+        };
+
         Map<String, Integer> map = new HashMap<>();
-        map.put("Местоположение", description.indexOf("Местоположение:"));
-        map.put("надморска височина", description.indexOf("надморска височина:"));
-        map.put("GPS", description.indexOf("GPS:"));
-        map.put("Описание", description.indexOf("Описание:"));
-        map.put("Съседни обекти", description.indexOf("Съседни обекти:"));
-        map.put("Изходен пункт", description.indexOf("Изходен пункт:"));
-        map.put("Изходни пунктове", description.indexOf("Изходни пунктове:"));
-        map.put("Стопанин", description.indexOf("Стопанин:"));
-        map.put("За контакти", description.indexOf(FOR_CONTACT.getConstant()));
-        map.put("За контакти с хижата", description.indexOf("За контакти с хижата:"));
-        map.put("еmail", description.indexOf("email:"));
-        map.put("Тавански етаж", description.indexOf("Тавански етаж:"));
-        map.put("Заслонът е пункт по маршрута", description.indexOf("Заслонът е пункт по маршрута:"));
-        map.put("url", description.indexOf("url:"));
-        map.put("тел", description.indexOf("тел. :"));
+        for (String key : keys) {
+            map.put(key, description.indexOf(key + ":"));
+        }
 
         List<Map.Entry<String, Integer>> entryList = new ArrayList<>(map.entrySet());
         entryList.sort(Map.Entry.comparingByValue());
-        List<Map.Entry<String, Integer>> entryStream = entryList.stream()
+
+        List<Map.Entry<String, Integer>> filteredEntries = entryList.stream()
                 .filter(e -> e.getValue() >= 0)
                 .toList();
 
-        List<String> descriptionChunk = new ArrayList<>();
-        for (int i = 0; i < entryStream.size(); i++) {
-            if (i != entryStream.size() - 1) {
-                descriptionChunk.add(description.substring(entryStream.get(i).getValue(), entryStream.get(i + 1).getValue()));
-            } else {
-                descriptionChunk.add(description.substring(entryStream.get(i).getValue()));
-            }
-        }
-        return descriptionChunk;
+        return IntStream.range(0, filteredEntries.size())
+                .mapToObj(i -> {
+                    if (i != filteredEntries.size() - 1) {
+                        return description.substring(filteredEntries.get(i).getValue(), filteredEntries.get(i + 1).getValue());
+                    } else {
+                        return description.substring(filteredEntries.get(i).getValue());
+                    }
+                })
+                .collect(Collectors.toList());
     }
 
     private String getBody(String url) {
